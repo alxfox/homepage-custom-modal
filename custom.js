@@ -1,5 +1,13 @@
 (function () {
 
+    // CONFIG array defines the bookmarks that will trigger network requests.
+    // Each entry has the following fields:
+    // id       - Unique identifier, must match the 'id' in bookmarks.yaml.
+    // url      - The target URL for the GET or POST request.
+    // header   - Header in "Key:Value" format. Key should be provided, value is optional. If 'password' is empty, the header value is ignored and user input will be used directly, instead.
+    // password - Optional. If set, the user must enter this password to trigger the request; otherwise, user input is used as the header.
+    // message  - Text shown in the password prompt for this bookmark.
+
     const CONFIG = [
         {
             id: "printer_on",
@@ -174,22 +182,40 @@
     async function runAction(cfg) {
         var entered = await showModal(cfg.message);
         if (entered === null) return;
-        // if cfg.password is empty, we just use entered
-        // if cfg.password exists, use cfg.header (if password was entered correctly)
+
+        // Parse header (format: "Key:Value")
+        let headerKey = null;
+        let headerValue = null;
+        if (cfg.header && cfg.header.includes(":")) {
+            const parts = cfg.header.split(":");
+            headerKey = parts[0].trim();
+            headerValue = parts.slice(1).join(":").trim();
+        }
+
+        // Determine final header value
         if (cfg.password !== "") {
+            // Fixed password mode
             if (entered !== cfg.password) {
                 showModal("Incorrect password");
                 return;
             }
-            else {
-                entered = cfg.header
-            }
+            entered = headerValue; // use configured header value
+        } else {
+            // No fixed password → user input becomes value
+            entered = entered;
         }
+
+        // Fallback if headerKey missing
+        if (!headerKey) headerKey = "X-Auth-Token";
+
+        // Prepare fetch options
+        const fetchOptions = { method: "POST" };
+        if (headerKey && entered) {
+            fetchOptions.headers = { [headerKey]: entered };
+        }
+
         try {
-            const response = await fetch(cfg.url, {
-                method: "POST",
-                headers: { "X-Auth-Token": entered }
-            });
+            const response = await fetch(cfg.url, fetchOptions);
 
             if (response.ok) {
                 showModal("Success.", "response");
